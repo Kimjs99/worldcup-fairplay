@@ -152,26 +152,57 @@
   function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
   function badge(url){ return url ? '<img class="badge-img" src="'+esc(url)+'" onerror="this.style.display=\'none\'">' : ""; }
 
-  // ── 공식 경기결과 로드 ──
+  // ── 공식 경기결과 로드 (TheSportsDB 브라우저 직접 호출 + localStorage 15분 캐시) ──
+  var TSDB = "https://www.thesportsdb.com/api/v1/json/3/";
+  var WC_LEAGUE = "4429", WC_SEASON = "2026";
+
+  function mapEvent(e){
+    return { date: e.dateEvent, time: (e.strTimeLocal || e.strTime),
+      home: e.strHomeTeam, away: e.strAwayTeam, hs: e.intHomeScore, as: e.intAwayScore,
+      homeBadge: e.strHomeTeamBadge, awayBadge: e.strAwayTeamBadge, round: e.intRound, venue: e.strVenue };
+  }
+  function mapStand(t){
+    return { rank: t.intRank, team: t.strTeam, badge: t.strBadge,
+      played: t.intPlayed, win: t.intWin, draw: t.intDraw, loss: t.intLoss,
+      gd: t.intGoalDifference, pts: t.intPoints };
+  }
+
   function loadOfficial(){
-    fetch(APPS_SCRIPT_URL + "?action=results")
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        if (!d.ok){ throw new Error(d.error || "오류"); }
-        renderUpcoming(d.upcoming || []);
-        renderRecent(d.recent || []);
-        renderStandings(d.standings || []);
-        var t = d.updated ? new Date(d.updated) : null;
-        document.getElementById("updated").textContent =
-          t ? ("업데이트 " + (t.getMonth()+1) + "/" + t.getDate() + " " + ("0"+t.getHours()).slice(-2) + ":" + ("0"+t.getMinutes()).slice(-2)) : "";
-      })
-      .catch(function(err){
-        var msg = '<div class="error-box">❌ 경기 데이터를 불러오지 못했어요. 잠시 후 새로고침 해주세요.</div>';
-        document.getElementById("upcoming").innerHTML = msg;
-        document.getElementById("recent").innerHTML = "";
-        document.getElementById("standings").innerHTML = "";
-        document.getElementById("updated").textContent = "";
-      });
+    try {
+      var c = JSON.parse(localStorage.getItem("wc_cache") || "null");
+      if (c && (Date.now() - c.t) < 15*60*1000) { renderAll(c.d, c.t); return; }
+    } catch(e){}
+
+    function getJson(url){ return fetch(url).then(function(r){ return r.json(); }).catch(function(){ return {}; }); }
+
+    Promise.all([
+      getJson(TSDB + "lookuptable.php?l=" + WC_LEAGUE + "&s=" + WC_SEASON),
+      getJson(TSDB + "eventspastleague.php?id=" + WC_LEAGUE),
+      getJson(TSDB + "eventsnextleague.php?id=" + WC_LEAGUE)
+    ]).then(function(res){
+      var data = {
+        standings: ((res[0] && res[0].table) || []).map(mapStand),
+        recent: ((res[1] && res[1].events) || []).map(mapEvent),
+        upcoming: ((res[2] && res[2].events) || []).map(mapEvent)
+      };
+      var now = Date.now();
+      try { localStorage.setItem("wc_cache", JSON.stringify({ t: now, d: data })); } catch(e){}
+      renderAll(data, now);
+    }).catch(function(){
+      document.getElementById("upcoming").innerHTML = '<div class="error-box">❌ 경기 데이터를 불러오지 못했어요. 잠시 후 새로고침 해주세요.</div>';
+      document.getElementById("recent").innerHTML = "";
+      document.getElementById("standings").innerHTML = "";
+      document.getElementById("updated").textContent = "";
+    });
+  }
+
+  function renderAll(d, ts){
+    renderUpcoming(d.upcoming || []);
+    renderRecent(d.recent || []);
+    renderStandings(d.standings || []);
+    var t = ts ? new Date(ts) : null;
+    document.getElementById("updated").textContent =
+      t ? ("업데이트 " + (t.getMonth()+1) + "/" + t.getDate() + " " + ("0"+t.getHours()).slice(-2) + ":" + ("0"+t.getMinutes()).slice(-2)) : "";
   }
 
   function matchRow(e, withScore){
