@@ -123,7 +123,20 @@
 </footer>
 
 <script>
-  var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwK_zMW331IT9VeuDhfZnKC_qzO8H2Gnw6CkP8cP4NosPvDrdJyxR79qMyRJcwUTiEBSQ/exec";
+  var APPS_SCRIPT_URL = "https://script.google.com/a/macros/hwajeop.ms.kr/s/AKfycbzPtoua2JSVBBiMkcRO8liL-GxXmjDJFmUYluYvZC63xkKU7XPAx2BItx95K1rZ8jDi/exec";
+
+  // 백엔드 호출: Apps Script로 서빙되면 google.script.run(도메인 제한 환경 OK), 그 외엔 fetch 폴백.
+  function callBackend(method, arg) {
+    return new Promise(function(resolve, reject) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+        if (method === "query") r.queryRecords(arg);
+        return;
+      }
+      fetch(APPS_SCRIPT_URL + "?action=query&code=" + encodeURIComponent(arg))
+        .then(function(r){ return r.json(); }).then(resolve).catch(reject);
+    });
+  }
 
   // 학생용 링크: Apps Script로 서빙되면 같은 /exec(기본=학생용), 그 외에는 상대경로
   (function(){
@@ -256,8 +269,7 @@
     btn.disabled = true; btn.textContent = "집계 중…";
     document.getElementById("fpResult").innerHTML = '<div class="card"><div class="loading">불러오는 중…</div></div>';
 
-    fetch(APPS_SCRIPT_URL + "?action=query&code=" + encodeURIComponent(code))
-      .then(function(r){ return r.json(); })
+    callBackend("query", code)
       .then(function(d){
         btn.disabled = false; btn.textContent = "집계";
         if (!d.ok){ document.getElementById("fpResult").innerHTML = '<div class="card"><div class="error-box">❌ ' + esc(d.error||"오류") + '</div></div>'; return; }

@@ -127,9 +127,24 @@
 </footer>
 
 <script>
-  // Apps Script 웹앱 주소 (학생용 APPS_SCRIPT_URL 과 동일). 어디서 열리든(Apps Script·GitHub Pages·로컬 파일) 항상 이 주소로 조회.
-  var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwK_zMW331IT9VeuDhfZnKC_qzO8H2Gnw6CkP8cP4NosPvDrdJyxR79qMyRJcwUTiEBSQ/exec";
-  var SCRIPT_URL = APPS_SCRIPT_URL;
+  // Apps Script 웹앱 주소 (학생용 APPS_SCRIPT_URL 과 동일).
+  var APPS_SCRIPT_URL = "https://script.google.com/a/macros/hwajeop.ms.kr/s/AKfycbzPtoua2JSVBBiMkcRO8liL-GxXmjDJFmUYluYvZC63xkKU7XPAx2BItx95K1rZ8jDi/exec";
+
+  // 백엔드 호출: Apps Script로 서빙되면 google.script.run(도메인 제한 환경 OK), 그 외엔 fetch 폴백.
+  function callBackend(method, arg) {
+    return new Promise(function(resolve, reject) {
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+        if (method === "query") r.queryRecords(arg);
+        else if (method === "delete") r.deleteRecord(arg.code, arg.row);
+        return;
+      }
+      var url;
+      if (method === "query") url = APPS_SCRIPT_URL + "?action=query&code=" + encodeURIComponent(arg);
+      else url = APPS_SCRIPT_URL + "?action=delete&code=" + encodeURIComponent(arg.code) + "&row=" + encodeURIComponent(arg.row);
+      fetch(url).then(function(r){ return r.json(); }).then(resolve).catch(reject);
+    });
+  }
 
   var fairplayLabels = [
     "악수·인사", "부상 시 경기중단", "상대 일으켜 세우기",
@@ -156,9 +171,7 @@
     document.getElementById("resultArea").innerHTML =
       '<div class="card"><div class="empty"><div class="icon">⏳</div><p>불러오는 중...</p></div></div>';
 
-    var url = SCRIPT_URL + "?action=query&code=" + encodeURIComponent(code);
-    fetch(url)
-      .then(function(r){ return r.json(); })
+    callBackend("query", code)
       .then(function(data){
         btn.disabled = false;
         btn.textContent = "조회";
@@ -267,9 +280,7 @@
     if (!confirm("이 제출 기록을 삭제할까요?")) return;
     btn.disabled = true;
     btn.textContent = "삭제 중...";
-    var url = SCRIPT_URL + "?action=delete&code=" + encodeURIComponent(code) + "&row=" + rowNum;
-    fetch(url)
-      .then(function(r){ return r.json(); })
+    callBackend("delete", { code: code, row: rowNum })
       .then(function(data){
         if (data.ok) {
           loadRecords();
