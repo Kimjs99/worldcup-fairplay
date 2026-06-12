@@ -42,6 +42,8 @@
   td.team { text-align: left; font-weight: 600; display: flex; align-items: center; gap: 6px; }
   td.team img { width: 18px; height: 18px; object-fit: contain; }
   tr.kr td { background: #fff7ed; }
+  .grp-title { margin: 18px 0 6px; font-size: 14px; font-weight: 800; color: #0f3460; padding-left: 2px; }
+  #standings > .grp-title:first-child { margin-top: 0; }
   .empty { text-align: center; padding: 28px 8px; color: #64748b; font-size: 13px; }
   .empty .icon { font-size: 34px; margin-bottom: 8px; }
   .loading { text-align: center; padding: 28px; color: #94a3b8; font-size: 13px; }
@@ -175,7 +177,7 @@
       homeBadge: e.strHomeTeamBadge, awayBadge: e.strAwayTeamBadge, round: e.intRound, venue: e.strVenue };
   }
   function mapStand(t){
-    return { rank: t.intRank, team: t.strTeam, badge: t.strBadge,
+    return { rank: t.intRank, team: t.strTeam, badge: t.strBadge, group: t.strGroup,
       played: t.intPlayed, win: t.intWin, draw: t.intDraw, loss: t.intLoss,
       gd: t.intGoalDifference, pts: t.intPoints };
   }
@@ -240,6 +242,10 @@
     if (!list.length){ el.innerHTML = '<div class="empty"><div class="icon">⚽</div>아직 종료된 경기가 없어요.</div>'; return; }
     el.innerHTML = list.map(function(e){ return matchRow(e, true); }).join("");
   }
+  function grpLabel(g){
+    var m = (g||"").match(/Group\s+([A-Z])\b/i);
+    return m ? m[1].toUpperCase() + "조" : (g || "기타");
+  }
   function renderStandings(list){
     var el = document.getElementById("standings");
     var played = list.filter(function(t){ return Number(t.played) > 0; });
@@ -247,16 +253,21 @@
       el.innerHTML = '<div class="empty"><div class="icon">🏁</div>순위는 조별리그가 진행되면 채워집니다.</div>';
       return;
     }
-    var rows = list.map(function(t){
-      return '<tr class="' + (isKR(t.team)?"kr":"") + '">' +
-        '<td>' + esc(t.rank) + '</td>' +
-        '<td class="team">' + badge2(t.badge) + esc(t.team) + '</td>' +
-        '<td>' + esc(t.played) + '</td>' +
-        '<td>' + esc(t.win) + '</td><td>' + esc(t.draw) + '</td><td>' + esc(t.loss) + '</td>' +
-        '<td>' + esc(t.gd) + '</td><td><strong>' + esc(t.pts) + '</strong></td>' +
-      '</tr>';
+    var groups = {};
+    list.forEach(function(t){ var k = grpLabel(t.group); (groups[k] = groups[k] || []).push(t); });
+    el.innerHTML = Object.keys(groups).sort().map(function(k){
+      var rows = groups[k].slice().sort(function(a,b){ return Number(a.rank) - Number(b.rank); }).map(function(t){
+        return '<tr class="' + (isKR(t.team)?"kr":"") + '">' +
+          '<td>' + esc(t.rank) + '</td>' +
+          '<td class="team">' + badge2(t.badge) + esc(t.team) + '</td>' +
+          '<td>' + esc(t.played) + '</td>' +
+          '<td>' + esc(t.win) + '</td><td>' + esc(t.draw) + '</td><td>' + esc(t.loss) + '</td>' +
+          '<td>' + esc(t.gd) + '</td><td><strong>' + esc(t.pts) + '</strong></td>' +
+        '</tr>';
+      }).join("");
+      return '<h3 class="grp-title">' + esc(k) + '</h3>' +
+        '<table><thead><tr><th>#</th><th style="text-align:left">팀</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득실</th><th>승점</th></tr></thead><tbody>' + rows + '</tbody></table>';
     }).join("");
-    el.innerHTML = '<table><thead><tr><th>#</th><th style="text-align:left">팀</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득실</th><th>승점</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
   function badge2(url){ return url ? '<img src="'+esc(url)+'" onerror="this.style.display=\'none\'">' : ""; }
 
