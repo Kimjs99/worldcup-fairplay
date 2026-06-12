@@ -1,0 +1,4 @@
+
+# clasp 로컬 배포 설정(절대경로·scriptId)
+appsscript/.clasp.json
+.appsscript_backup/
