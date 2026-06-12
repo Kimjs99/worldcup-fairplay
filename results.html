@@ -44,6 +44,19 @@
   tr.kr td { background: #fff7ed; }
   .grp-title { margin: 18px 0 6px; font-size: 14px; font-weight: 800; color: #0f3460; padding-left: 2px; }
   #standings > .grp-title:first-child { margin-top: 0; }
+  .dash-scope { display:flex; gap:16px; margin-bottom:10px; font-size:13px; }
+  .dash-scope label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .en-tag { font-size:10px; color:#94a3b8; font-weight:500; }
+  .corr-r { text-align:center; font-size:13px; margin:8px 0; color:#1e293b; }
+  .warn-box { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 12px; font-size:12px; color:#92400e; margin-bottom:12px; line-height:1.5; }
+  .pred-row { border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+  .pred-teams { font-weight:700; font-size:14px; margin-bottom:4px; display:flex; align-items:center; gap:6px; }
+  .pred-teams .vs { color:#94a3b8; font-weight:500; font-size:12px; }
+  .pred-teams .kr { color:#c2410c; }
+  .pred-win { font-size:13px; color:#0f3460; }
+  .pred-conf { background:#0f3460; color:#fff; border-radius:6px; font-size:11px; padding:1px 7px; margin-left:6px; }
+  .pred-reason { font-size:11px; color:#64748b; margin-top:3px; }
+  .pred-na { font-size:12px; color:#94a3b8; }
   .empty { text-align: center; padding: 28px 8px; color: #64748b; font-size: 13px; }
   .empty .icon { font-size: 34px; margin-bottom: 8px; }
   .loading { text-align: center; padding: 28px; color: #94a3b8; font-size: 13px; }
@@ -83,6 +96,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="official">🏆 공식 경기</button>
     <button class="tab" data-tab="fairplay">🤝 페어플레이</button>
+    <button class="tab" data-tab="dashboard">📊 대시보드</button>
   </div>
 
   <!-- ── 공식 경기 ── -->
@@ -115,13 +129,30 @@
     <div id="fpResult"></div>
   </div>
 
+  <!-- ── 대시보드 ── -->
+  <div class="section" id="sec-dashboard">
+    <div class="card">
+      <h2>📊 페어플레이 대시보드</h2>
+      <div class="dash-scope">
+        <label><input type="radio" name="dashScope" value="code" checked> 수업 코드별</label>
+        <label><input type="radio" name="dashScope" value="all"> 전체 합산</label>
+      </div>
+      <div class="row" id="dashCodeRow">
+        <input id="dashCodeInput" class="code-input" placeholder="수업 코드 (예: 화접중-3-1)" />
+      </div>
+      <button class="btn btn-primary" id="dashBtn" onclick="loadDashboard()">불러오기</button>
+      <div class="info-box">💡 페어플레이 관찰 결과를 <strong>팀별로 정리</strong>하고, 실제 경기결과(승점)와의 <strong>상관관계</strong>를 분석해 다음 경기를 <strong>예측</strong>해 봅니다.</div>
+    </div>
+    <div id="dashResult"></div>
+  </div>
+
   <a class="nav-link" href="ENV_STUDENT_LINK">← 학생용 관찰 기록으로 돌아가기</a>
 
 </div>
 
 <footer>
   체육 학습자료 · 2026 FIFA 북중미 월드컵 · 경기결과 &amp; 페어플레이<br>
-  <span style="opacity:.8">v1.1.0 · &copy; 2026 화접중학교 · 제작 <a href="https://github.com/Kimjs99" style="color:inherit">Kimjs99</a>. All rights reserved.</span>
+  <span style="opacity:.8">v1.3.0 · &copy; 2026 화접중학교 · 제작 <a href="https://github.com/Kimjs99" style="color:inherit">Kimjs99</a>. All rights reserved.</span>
 </footer>
 
 <script>
@@ -132,11 +163,14 @@
     return new Promise(function(resolve, reject) {
       if (typeof google !== "undefined" && google.script && google.script.run) {
         var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
-        if (method === "query") r.queryRecords(arg);
+        if (method === "queryall") { r.queryAllRecords(); return; }
+        if (method === "query") { r.queryRecords(arg); return; }
         return;
       }
-      fetch(APPS_SCRIPT_URL + "?action=query&code=" + encodeURIComponent(arg))
-        .then(function(r){ return r.json(); }).then(resolve).catch(reject);
+      var url = (method === "queryall")
+        ? (APPS_SCRIPT_URL + "?action=queryall")
+        : (APPS_SCRIPT_URL + "?action=query&code=" + encodeURIComponent(arg));
+      fetch(url).then(function(r){ return r.json(); }).then(resolve).catch(reject);
     });
   }
 
@@ -211,7 +245,9 @@
     });
   }
 
+  var officialData_ = null;
   function renderAll(d, ts){
+    officialData_ = d;
     renderUpcoming(d.upcoming || []);
     renderRecent(d.recent || []);
     renderStandings(d.standings || []);
@@ -329,6 +365,142 @@
   }
 
   document.getElementById("codeInput").addEventListener("keydown", function(e){ if (e.key === "Enter") loadFairplay(); });
+
+  // ── 대시보드: 팀별 데이터 + 상관관계 + 예측 ──
+  var TEAM_KO_EN = {
+    "멕시코":"Mexico","남아공":"South Africa","남아프리카공화국":"South Africa",
+    "대한민국":"South Korea","한국":"South Korea","코리아":"South Korea","체코":"Czech Republic",
+    "캐나다":"Canada","보스니아":"Bosnia-Herzegovina","보스니아헤르체고비나":"Bosnia-Herzegovina",
+    "카타르":"Qatar","스위스":"Switzerland",
+    "브라질":"Brazil","모로코":"Morocco","아이티":"Haiti","스코틀랜드":"Scotland",
+    "미국":"USA","파라과이":"Paraguay","호주":"Australia","튀르키예":"Turkey","터키":"Turkey",
+    "독일":"Germany","퀴라소":"Curacao","코트디부아르":"Ivory Coast","에콰도르":"Ecuador",
+    "네덜란드":"Netherlands","일본":"Japan","스웨덴":"Sweden","튀니지":"Tunisia",
+    "벨기에":"Belgium","이집트":"Egypt","이란":"Iran","뉴질랜드":"New Zealand",
+    "스페인":"Spain","카보베르데":"Cape Verde","사우디":"Saudi Arabia","사우디아라비아":"Saudi Arabia","우루과이":"Uruguay",
+    "프랑스":"France","세네갈":"Senegal","이라크":"Iraq","노르웨이":"Norway",
+    "아르헨티나":"Argentina","알제리":"Algeria","오스트리아":"Austria","요르단":"Jordan",
+    "포르투갈":"Portugal","dr콩고":"DR Congo","콩고":"DR Congo","우즈베키스탄":"Uzbekistan","우즈벡":"Uzbekistan","콜롬비아":"Colombia",
+    "잉글랜드":"England","크로아티아":"Croatia","가나":"Ghana","파나마":"Panama"
+  };
+  function stripName(s){ return String(s||"").toLowerCase().replace(/\([^)]*\)/g,"").replace(/[^가-힣a-z0-9]/g,""); }
+  function normEn(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+  function normCode(v){ return (v||"").trim().replace(/[\s/\\'"]+/g,"-").replace(/-+/g,"-").replace(/^-|-$/,"").toLowerCase(); }
+  function pearson(xs, ys){
+    var n=xs.length; if(n<2) return null;
+    var mx=xs.reduce(function(a,b){return a+b;},0)/n, my=ys.reduce(function(a,b){return a+b;},0)/n;
+    var num=0,dx=0,dy=0;
+    for(var i=0;i<n;i++){ var a=xs[i]-mx,b=ys[i]-my; num+=a*b; dx+=a*a; dy+=b*b; }
+    if(dx===0||dy===0) return null;
+    return num/Math.sqrt(dx*dy);
+  }
+
+  function loadDashboard(){
+    var scope = (document.querySelector('input[name=dashScope]:checked')||{}).value || "code";
+    var btn = document.getElementById("dashBtn");
+    btn.disabled = true; btn.textContent = "불러오는 중…";
+    document.getElementById("dashResult").innerHTML = '<div class="card"><div class="loading">불러오는 중…</div></div>';
+    var p;
+    if (scope === "all") {
+      p = callBackend("queryall").then(function(d){
+        if (!d.ok) return Promise.reject(d.error || "오류");
+        return { teams: d.teams || [], meta: { records: d.totalRecords || 0, codes: d.codeCount || 0, scope: "전체 합산" } };
+      });
+    } else {
+      var code = normCode(document.getElementById("dashCodeInput").value);
+      if (!code){ alert("수업 코드를 입력해 주세요."); btn.disabled=false; btn.textContent="불러오기"; return; }
+      p = callBackend("query", code).then(function(d){
+        if (!d.ok) return Promise.reject(d.error || "오류");
+        var agg = {};
+        (d.records || []).forEach(function(r){ add(agg, r["팀A"], Number(r["합계(A)"]||0)); add(agg, r["팀B"], Number(r["합계(B)"]||0)); });
+        var teams = Object.keys(agg).map(function(n){ var a=agg[n]; return { name:n, sum:a.sum, count:a.count, avg:a.count?a.sum/a.count:0 }; });
+        return { teams: teams, meta: { records: (d.records||[]).length, scope: "["+code+"]" } };
+      });
+    }
+    p.then(function(res){ btn.disabled=false; btn.textContent="불러오기"; renderDashboard(res.teams, res.meta); })
+     .catch(function(err){ btn.disabled=false; btn.textContent="불러오기"; document.getElementById("dashResult").innerHTML='<div class="card"><div class="error-box">❌ '+esc(err||"네트워크 오류")+'</div></div>'; });
+  }
+
+  function renderDashboard(teams, meta){
+    var el = document.getElementById("dashResult");
+    if (!teams.length){ el.innerHTML='<div class="card"><div class="empty"><div class="icon">📭</div>'+esc(meta.scope)+' 페어플레이 기록이 아직 없어요.</div></div>'; return; }
+    var hasOfficial = !!(officialData_ && officialData_.standings && officialData_.standings.length);
+    var stand = {};
+    if (hasOfficial) officialData_.standings.forEach(function(s){ stand[normEn(s.team)] = s; });
+    teams.forEach(function(t){ var en = TEAM_KO_EN[stripName(t.name)] || null; t.en = en; t.official = en ? (stand[normEn(en)]||null) : null; });
+    teams.sort(function(a,b){ return b.avg - a.avg; });
+
+    var tRows = teams.map(function(t,i){
+      var o=t.official;
+      var off = o ? (esc(o.played)+'경기 · '+esc(o.win)+'승 '+esc(o.draw)+'무 '+esc(o.loss)+'패 · 승점 '+esc(o.pts)) : '<span style="color:#cbd5e1">매칭 안 됨</span>';
+      return '<tr class="'+(isKR(t.en||t.name)?'kr':'')+'">'+
+        '<td>'+(i+1)+'</td>'+
+        '<td style="text-align:left">'+esc(t.name)+(t.en?' <span class="en-tag">'+esc(t.en)+'</span>':'')+'</td>'+
+        '<td>'+t.count+'</td><td><strong>'+t.avg.toFixed(1)+'</strong></td><td>'+t.sum+'</td>'+
+        '<td style="text-align:left;font-size:11px">'+off+'</td></tr>';
+    }).join("");
+    var tableCard = '<div class="card"><h2>📋 팀별 페어플레이 데이터</h2>'+
+      '<div style="font-size:11px;color:#64748b;margin-bottom:8px">'+esc(meta.scope)+' · 관찰 '+meta.records+'건'+(meta.codes?(' · 수업 '+meta.codes+'개'):'')+' · 페어플레이 평균 높은 순</div>'+
+      '<div style="overflow-x:auto"><table><thead><tr><th>#</th><th style="text-align:left">팀</th><th>관찰</th><th>평균</th><th>총점</th><th style="text-align:left">공식 경기 성적</th></tr></thead><tbody>'+tRows+'</tbody></table></div></div>';
+
+    el.innerHTML = tableCard + renderCorrelation(teams, hasOfficial) + renderPrediction(teams, hasOfficial);
+  }
+
+  function renderCorrelation(teams, hasOfficial){
+    if (!hasOfficial) return '<div class="card"><h2>📈 페어플레이 ↔ 경기력 상관관계</h2><div class="empty"><div class="icon">⏳</div>공식 경기 데이터를 불러오는 중이거나 아직 없어요.</div></div>';
+    var pts = teams.filter(function(t){ return t.official && Number(t.official.played)>0; })
+      .map(function(t){ return { name:t.en||t.name, x:t.avg, y:Number(t.official.pts), kr:isKR(t.en||t.name) }; });
+    if (pts.length < 3) return '<div class="card"><h2>📈 페어플레이 ↔ 경기력 상관관계</h2><div class="empty"><div class="icon">🌱</div>경기가 더 치러지면(현재 '+pts.length+'팀 매칭) 상관관계가 나타나요. 페어플레이 점수가 높은 팀이 실제로 승점도 높을지 지켜보세요!</div></div>';
+    var r = pearson(pts.map(function(p){return p.x;}), pts.map(function(p){return p.y;}));
+    return '<div class="card"><h2>📈 페어플레이 ↔ 경기력 상관관계</h2>'+scatterSVG(pts)+
+      '<div class="corr-r">상관계수 r = <strong>'+(r==null?'—':r.toFixed(2))+'</strong> · '+pts.length+'팀</div>'+
+      '<div class="info-box">'+interpretR(r)+'</div></div>';
+  }
+
+  function scatterSVG(pts){
+    var W=320,H=240,ml=36,mr=12,mt=12,mb=30;
+    var maxX=Math.ceil(Math.max.apply(null,pts.map(function(p){return p.x;}))||1);
+    var maxY=Math.ceil(Math.max.apply(null,pts.map(function(p){return p.y;}))||1);
+    function sx(x){ return ml + (x/maxX)*(W-ml-mr); }
+    function sy(y){ return H-mb - (y/maxY)*(H-mt-mb); }
+    var dots=pts.map(function(p){ return '<circle cx="'+sx(p.x).toFixed(1)+'" cy="'+sy(p.y).toFixed(1)+'" r="5" fill="'+(p.kr?'#f97316':'#0f3460')+'" fill-opacity="0.75"><title>'+esc(p.name)+' (평균 '+p.x.toFixed(1)+', 승점 '+p.y+')</title></circle>'; }).join("");
+    var axis='<line x1="'+ml+'" y1="'+(H-mb)+'" x2="'+(W-mr)+'" y2="'+(H-mb)+'" stroke="#cbd5e1"/><line x1="'+ml+'" y1="'+mt+'" x2="'+ml+'" y2="'+(H-mb)+'" stroke="#cbd5e1"/>';
+    var midY=(mt+H-mb)/2;
+    var labels='<text x="'+((ml+W-mr)/2)+'" y="'+(H-6)+'" text-anchor="middle" font-size="10" fill="#64748b">페어플레이 평균 →</text><text x="11" y="'+midY+'" text-anchor="middle" font-size="10" fill="#64748b" transform="rotate(-90 11 '+midY+')">승점 →</text>';
+    return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="max-width:420px;display:block;margin:6px auto">'+axis+labels+dots+'</svg>';
+  }
+
+  function interpretR(r){
+    if (r==null) return '데이터가 부족해 상관계수를 계산할 수 없어요.';
+    var a=Math.abs(r), strength=a<0.2?'거의 없는':a<0.4?'약한':a<0.6?'뚜렷한':a<0.8?'강한':'매우 강한', dir=r>0?'양(+)':'음(−)';
+    var msg = a<0.2 ? '페어플레이 점수와 승점 사이에 뚜렷한 관계가 보이지 않아요.' : (r>0 ? '페어플레이 점수가 높은 팀일수록 승점도 높은 경향이에요.' : '페어플레이 점수가 높을수록 오히려 승점이 낮은 경향이에요.');
+    return '<strong>'+dir+'의 '+strength+' 상관</strong> — '+msg+' <span style="color:#94a3b8">표본이 작으면 우연일 수 있어 경기가 쌓일수록 정확해져요.</span>';
+  }
+
+  function renderPrediction(teams, hasOfficial){
+    if (!officialData_ || !officialData_.upcoming || !officialData_.upcoming.length) return '<div class="card"><h2>🔮 다음 경기 예측</h2><div class="empty"><div class="icon">📭</div>예정된 경기 정보가 아직 없어요.</div></div>';
+    var byEn={}; teams.forEach(function(t){ if(t.en) byEn[normEn(t.en)]=t; });
+    var maxAvg=Math.max.apply(null,teams.map(function(t){return t.avg;}))||1;
+    var maxPts=hasOfficial?(Math.max.apply(null,teams.map(function(t){return t.official?Number(t.official.pts):0;}))||1):1;
+    var W_FP=0.6, W_PTS=0.4;
+    function score(t){ var fpN=t.avg/maxAvg, ptsN=(hasOfficial&&t.official)?Number(t.official.pts)/maxPts:0; return W_FP*fpN + (hasOfficial?W_PTS*ptsN:0); }
+    var rows = officialData_.upcoming.slice(0,12).map(function(e){
+      var hT=byEn[normEn(e.home)], aT=byEn[normEn(e.away)];
+      var head='<div class="pred-teams"><span class="'+(isKR(e.home)?'kr':'')+'">'+esc(e.home)+'</span><span class="vs">vs</span><span class="'+(isKR(e.away)?'kr':'')+'">'+esc(e.away)+'</span></div>';
+      if (!hT||!aT) return '<div class="pred-row">'+head+'<div class="pred-na">관찰 데이터가 없어 예측할 수 없어요.</div></div>';
+      var sH=score(hT), sA=score(aT);
+      if (Math.abs(sH-sA)<0.001) return '<div class="pred-row">'+head+'<div class="pred-na">⚖️ 막상막하 — 우열을 가리기 어려워요 (페어플레이 '+hT.avg.toFixed(1)+' vs '+aT.avg.toFixed(1)+')</div></div>';
+      var winName=sH>sA?e.home:e.away, wT=sH>sA?hT:aT, lT=sH>sA?aT:hT;
+      var conf=Math.round(50+50*Math.min(1,Math.abs(sH-sA)/Math.max(sH,sA,0.0001)));
+      var reason='페어플레이 평균 '+wT.avg.toFixed(1)+' vs '+lT.avg.toFixed(1)+((hasOfficial&&wT.official&&lT.official)?(' · 승점 '+wT.official.pts+' vs '+lT.official.pts):'');
+      return '<div class="pred-row">'+head+'<div class="pred-win">예측 우세: <strong>'+esc(winName)+'</strong><span class="pred-conf">신뢰도 '+conf+'%</span></div><div class="pred-reason">'+reason+'</div></div>';
+    }).join("");
+    return '<div class="card"><h2>🔮 다음 경기 예측</h2>'+
+      '<div class="warn-box">⚠️ 페어플레이 점수와 공식 승점을 6:4로 가중합한 <strong>교육용 가설</strong>이에요. 실제 결과와 비교하며 "페어플레이가 좋은 팀이 정말 이길까?"를 탐구해 보세요.</div>'+rows+'</div>';
+  }
+
+  document.querySelectorAll('input[name=dashScope]').forEach(function(rb){ rb.addEventListener("change", function(){ document.getElementById("dashCodeRow").style.display = (this.value==="all")?"none":""; }); });
+  (function(){ var dci=document.getElementById("dashCodeInput"); if(dci) dci.addEventListener("keydown", function(e){ if(e.key==="Enter") loadDashboard(); }); })();
 
   loadOfficial();
 </script>
