@@ -127,6 +127,15 @@ textarea { resize: vertical; }
 /* ── 경고/안내 박스 ── */
 .warn-box  { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 10px 12px; font-size: 11.5px; color: #92400e; line-height: 1.6; }
 .info-box  { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #1e40af; line-height: 1.6; }
+.gs-table { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:6px; }
+.gs-table th { background:#0f3460; color:#fff; padding:6px 4px; font-size:11px; font-weight:600; }
+.gs-table td { padding:6px 4px; border-bottom:1px solid #f1f5f9; text-align:center; }
+.gs-table td.gs-team { text-align:left; font-weight:600; }
+.gs-table tr.gs-kr td { background:#fff7ed; color:#c2410c; }
+.gs-grp { margin:14px 0 5px; font-size:13px; font-weight:800; color:#0f3460; }
+#groupStandings > .gs-grp:first-child { margin-top:0; }
+.gs-empty { text-align:center; padding:24px 8px; color:#94a3b8; font-size:13px; }
+.gs-loading { text-align:center; padding:24px; color:#94a3b8; font-size:13px; }
 .ok-box    { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #15803d; line-height: 1.6; }
 .err-box   { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #991b1b; line-height: 1.6; }
 
@@ -265,6 +274,11 @@ footer { text-align: center; padding: 20px 16px; font-size: 11px; color: #94a3b8
 
   <!-- ── 조별리그 ── -->
   <section id="sec-group" style="display:none">
+    <div class="card">
+      <h2>📊 실시간 조별 순위</h2>
+      <div id="groupStandings"><div class="gs-loading">불러오는 중…</div></div>
+      <div class="info-box">📡 TheSportsDB에서 실시간으로 가져와요. 대회가 진행되면 각 조 순위가 채워집니다.</div>
+    </div>
     <div class="card">
       <h2>📋 조별리그 규칙</h2>
       <div class="step-box"><div class="step-num">1</div><div><div class="step-title">리그 방식 (Round Robin)</div><div class="step-body">같은 조 4팀이 서로 한 번씩 대결 → 팀당 총 <strong>3경기</strong> 보장</div></div></div>
@@ -952,6 +966,47 @@ var BTN_LABELS = ["개요","조별리그","페어플레이","관찰기록","대�
 var SEC_KEYS = Object.keys(SEC_IDS);
 var currentSec = "overview";
 
+// ── 실시간 조별 순위 (TheSportsDB 직접 fetch + 15분 캐시) ──
+var TSDB_S = "https://www.thesportsdb.com/api/v1/json/3/";
+var groupLoaded = false;
+function gsEsc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function gsIsKR(n){ return /korea/i.test(n||""); }
+function gsGrp(g){ var m=(g||"").match(/Group\s+([A-Z])\b/i); return m ? m[1].toUpperCase()+"조" : (g||"기타"); }
+function loadGroupStandings(){
+  groupLoaded = true;
+  var el = document.getElementById("groupStandings");
+  try {
+    var c = JSON.parse(localStorage.getItem("wc_group_cache") || "null");
+    if (c && (Date.now()-c.t) < 15*60*1000){ renderGroupStandings(c.d); return; }
+  } catch(e){}
+  fetch(TSDB_S + "lookuptable.php?l=4429&s=2026")
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var list = ((j && j.table) || []).map(function(t){
+        return { rank:t.intRank, team:t.strTeam, group:t.strGroup, played:t.intPlayed, win:t.intWin, draw:t.intDraw, loss:t.intLoss, gd:t.intGoalDifference, pts:t.intPoints };
+      });
+      try { localStorage.setItem("wc_group_cache", JSON.stringify({ t:Date.now(), d:list })); } catch(e){}
+      renderGroupStandings(list);
+    })
+    .catch(function(){ el.innerHTML = '<div class="info-box" style="background:#fef2f2;border-color:#fca5a5;color:#991b1b">❌ 순위를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</div>'; groupLoaded = false; });
+}
+function renderGroupStandings(list){
+  var el = document.getElementById("groupStandings");
+  var played = list.filter(function(t){ return Number(t.played) > 0; });
+  if (!list.length || !played.length){ el.innerHTML = '<div class="gs-empty">🏁 순위는 조별리그가 시작되면 채워집니다.</div>'; return; }
+  var groups = {};
+  list.forEach(function(t){ var k=gsGrp(t.group); (groups[k]=groups[k]||[]).push(t); });
+  el.innerHTML = Object.keys(groups).sort().map(function(k){
+    var rows = groups[k].slice().sort(function(a,b){ return Number(a.rank)-Number(b.rank); }).map(function(t){
+      return '<tr class="'+(gsIsKR(t.team)?"gs-kr":"")+'">'+
+        '<td>'+gsEsc(t.rank)+'</td><td class="gs-team">'+gsEsc(t.team)+'</td>'+
+        '<td>'+gsEsc(t.played)+'</td><td>'+gsEsc(t.win)+'</td><td>'+gsEsc(t.draw)+'</td><td>'+gsEsc(t.loss)+'</td>'+
+        '<td>'+gsEsc(t.gd)+'</td><td><strong>'+gsEsc(t.pts)+'</strong></td></tr>';
+    }).join("");
+    return '<div class="gs-grp">'+gsEsc(k)+'</div><table class="gs-table"><thead><tr><th>#</th><th style="text-align:left">팀</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득실</th><th>승점</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }).join("");
+}
+
 function go(key) {
   Object.values(SEC_IDS).forEach(function(id){ document.getElementById(id).style.display = "none"; });
   document.getElementById(SEC_IDS[key]).style.display = "block";
@@ -959,6 +1014,7 @@ function go(key) {
   btns.forEach(function(b, i){ b.className = SEC_KEYS[i] === key ? "active" : ""; });
   currentSec = key;
   if (key === "quiz" && !quizSet.length) newQuizSet();
+  if (key === "group" && !groupLoaded) loadGroupStandings();
   window.scrollTo(0, 0);
 }
 
