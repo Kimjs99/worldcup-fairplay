@@ -10,15 +10,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 이 저장소(`worldcup-fairplay`, https://github.com/Kimjs99/worldcup-fairplay)가 **프로젝트의 유일한 home**이다. 과거엔 상위 `workspace-portal` 모노레포의 `월드컵 페어플레이 기록/` 폴더에 소스가 있고 Pages만 별도 저장소였으나, 전체를 이 저장소로 마이그레이션했다.
 
-| 경로 | 역할 | 비고 |
-|------|------|------|
-| 루트 `index.html`·`teacher.html`·`results.html` | **GitHub Pages 배포본** (index=학생용, teacher=교사용, results=결과) | Pages는 루트에서 서빙 — 위치 고정 |
-| `files/` | 원본 소스 (`학생용.html`, `교사용_조회.html`, `결과.html`, `Code.gs`, `배포가이드.md`) | 가독성용 원본 |
-| `appsscript/` | 개인/레거시 clasp 배포 소스 (+`.clasp.json`) | 레거시 스크립트(`AKfycbwK`) — 실사용 안 함 |
-| `appsscript-school/` | **★학교 도메인 clasp 배포 소스** (+`.clasp.json`) | 실사용 백엔드(`AKfycbzP`). 배포는 여기서 한다 |
+**단일 소스 원칙 (2026-06-13 리팩토링):** HTML은 **루트에서만 편집**하고, 백엔드는 **`files/Code.gs`에서만 편집**한다. 배포본(`appsscript-school/`)은 `sync.sh`로 생성하는 산출물이므로 직접 고치지 않는다.
 
-- **같은 콘텐츠가 여러 경로에 중복 존재하므로 수정 시 모두 동기화해야 한다**: `files/학생용.html` ↔ `appsscript*/학생용.html` ↔ 루트 `index.html`, `교사용_조회.html` ↔ 루트 `teacher.html`, `결과.html` ↔ 루트 `results.html`. 한 곳만 고치면 채널 간 불일치가 생긴다.
-- 배포 시엔 보통 `appsscript-school/`(학교)·`appsscript/`(레거시) 소스를 최신 `files/`(또는 루트)와 맞춘 뒤 clasp push/deploy 한다.
+| 경로 | 역할 | 편집 |
+|------|------|------|
+| 루트 `index.html`·`teacher.html`·`results.html` | **HTML 소스 = GitHub Pages 배포본** (index=학생용, teacher=교사용, results=결과). Pages는 루트에서 서빙 | ✏️ **여기서 편집** |
+| `files/Code.gs` | 백엔드 소스 (Apps Script `doGet`/`doPost`) | ✏️ **여기서 편집** |
+| `files/배포가이드.md` | 배포 절차 원문 | 문서 |
+| `appsscript-school/` | **★학교 도메인 clasp 배포본** (`Code.js`, `학생용.html`, `교사용_조회.html`, `결과.html`, `appsscript.json`, `.clasp.json`). 실사용 백엔드(`AKfycbzP`) | 🚫 직접 편집 금지 — `sync.sh`가 생성 |
+| `sync.sh` | 소스 → 배포본 전파 스크립트 (`./sync.sh`, 점검은 `./sync.sh --check`) | — |
+
+- **편집은 소스(루트 HTML · `files/Code.gs`) 한 곳에서만.** 그 다음 `./sync.sh`로 `appsscript-school/`(한글 파일명)을 생성한다. 배포본을 손으로 고치지 말 것(다음 sync 때 덮어써짐).
+- `.clasp.json`은 머신 종속(절대 rootDir)이라 git 추적 제외(`.gitignore`). scriptId·deploymentId는 이 문서에 기록돼 있어 복구 가능.
+- 과거엔 같은 HTML이 root·`files/`·`appsscript/`·`appsscript-school/` 4벌로 중복돼 수동 동기화 부담·드리프트가 있었으나, 단일 소스 + `sync.sh`로 정리하고 레거시 개인 배포본(`appsscript/`)은 제거했다.
 
 ## 이중 배포 구조 (왜 두 채널인가)
 
@@ -31,34 +35,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 배포 명령어
 
-⚠️ **Apps Script가 2개로 갈려 있다. 실제 학생·교사가 쓰는 live는 학교(도메인제한) 스크립트다. 개인 스크립트는 레거시.**
+실사용 백엔드는 **학교(도메인제한) Apps Script** 하나뿐이다. (개인 레거시 스크립트는 2026-06-13 정리에서 폴더째 제거 — 필요 시 아래 ID로 복구 가능하나 사용 안 함.)
 
 | 구분 | Script ID | deploymentId | 비고 |
 |------|-----------|--------------|------|
 | **★ 실사용(학교)** | `1knqnq2iB2BFso_5ySNcwzlkLcw9NpVn1FFVpo9ZmCwZuJgyA8Pxz4kc8` | `AKfycbzPtoua2JSVBBiMkcRO8liL-GxXmjDJFmUYluYvZC63xkKU7XPAx2BItx95K1rZ8jDi` | 소유 `kimjs@hwajeop.ms.kr`. 모든 HTML 링크·데이터가 여기로. URL=`/a/macros/hwajeop.ms.kr/s/AKfycbzPtoua…/exec` |
-| 레거시(개인) | `1sc9D0yDiT4V3Kgh2dh9Qx-v1lywY1JcQaQxgMirLkVGXt6cY9BbnqTv2` | `AKfycbwK_zMW331IT9VeuDhfZnKC_qzO8H2Gnw6CkP8cP4NosPvDrdJyxR79qMyRJcwUTiEBSQ` | 사실상 미사용 |
+| 레거시(개인, 제거됨) | `1sc9D0yDiT4V3Kgh2dh9Qx-v1lywY1JcQaQxgMirLkVGXt6cY9BbnqTv2` | `AKfycbwK_zMW331IT9VeuDhfZnKC_qzO8H2Gnw6CkP8cP4NosPvDrdJyxR79qMyRJcwUTiEBSQ` | 미사용 |
 
 ```bash
-# Apps Script 재배포 — ★학교 스크립트(appsscript-school/)에 배포해야 실제 반영됨★
 cd ~/Projects/worldcup-fairplay
 
-# 1) 학교 계정으로 로그인 (개인 Gmail은 "The caller does not have permission")
+# 0) 소스(루트 HTML·files/Code.gs)를 배포본으로 전파
+./sync.sh
+
+# 1) 학교 계정 로그인 (개인 Gmail은 "The caller does not have permission")
 clasp login   # 브라우저에서 kimjs@hwajeop.ms.kr 선택
 
-# 2) appsscript-school/ 이 학교 scriptId용 clasp dir (.clasp.json 포함). 여기서 push/deploy.
+# 2) appsscript-school/ 에서 push/deploy
 cd appsscript-school
-clasp pull   # 먼저 현재 라이브를 백업·diff로 "순수 상위호환"인지(학교 고유 변경 없는지) 확인
-# 필요하면 files/ 또는 루트 최신 HTML로 동기화한 뒤:
+clasp pull    # ★먼저 라이브 백업·diff로 "순수 상위호환"(학교 고유 변경 없음) 확인.
+              #   pull이 배포본을 덮어쓰므로, 확인 후 다시 `cd .. && ./sync.sh`로 내 소스 복원.
 clasp push -f
 clasp deploy --deploymentId AKfycbzPtoua2JSVBBiMkcRO8liL-GxXmjDJFmUYluYvZC63xkKU7XPAx2BItx95K1rZ8jDi \
   --description "vX.Y.Z 설명"
 
-# GitHub Pages 배포 = 이 저장소를 push하면 됨 (루트 index/teacher/results 서빙)
+# GitHub Pages 배포 = 저장소 push (루트 index/teacher/results 서빙)
 cd ~/Projects/worldcup-fairplay && git push origin main
 ```
 
-- **재배포는 반드시 위 학교 `--deploymentId`(기존 배포)로 해야 한다.** 새 deploymentId로 배포하면 `/exec` URL이 바뀌어 학생들에게 이미 공유한 링크가 깨진다.
-- **`clasp push -f` 전에 반드시 `clasp pull`로 학교 라이브를 백업하고 diff**해 내 소스가 순수 상위호환인지(학교에만 있는 고유 변경이 없는지) 확인한다. 과거 확인 시 소스가 학교 라이브의 깨끗한 신버전이었음(교사용·appsscript.json 동일, Code.js는 queryall만 추가).
+- **재배포는 반드시 위 학교 `--deploymentId`(기존 배포)로** 한다. 새 deploymentId면 `/exec` URL이 바뀌어 학생 공유 링크가 깨진다.
+- **`clasp push -f` 전 반드시 `clasp pull`로 라이브를 백업·diff**해 내 소스가 순수 상위호환인지 확인한다. `clasp pull`은 `appsscript-school/`을 라이브로 덮어쓰므로, 확인 뒤 `./sync.sh`로 내 소스를 다시 얹고 push한다. (배포본은 sync 산출물이라 안전)
+- `./sync.sh --check`로 배포 전 소스↔배포본 드리프트를 점검할 수 있다.
 - 정적 HTML이라 로컬 빌드/lint/테스트 도구가 전혀 없다. 찾지 말 것. HTML 내 JS 문법만 점검하려면 `<script>` 블록을 빼내 `node --check`로 확인하고, 브라우저로 직접 열어 동작을 본다.
 - 배포 후 점검: `curl -sL ".../exec?view=results"`로 서빙 HTML에 신규 함수(예: `computeStandings`) 포함 여부 확인(전파 1~3분). 단 공식 경기 데이터·렌더는 클라이언트 fetch+샌드박스 iframe이라 curl로 안 보이니 **실제 렌더는 브라우저 스크린샷으로** 확인.
 

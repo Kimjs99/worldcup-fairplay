@@ -1,4 +1,7 @@
-
-# clasp 로컬 배포 설정(절대경로·scriptId)
-appsscript/.clasp.json
+# clasp 로컬 배포 설정 — 절대경로(rootDir)·scriptId 포함, 머신 종속이라 추적 제외.
+# scriptId·deploymentId는 CLAUDE.md에 기록돼 있어 복구 가능.
+**/.clasp.json
 .appsscript_backup/
+
+# 아카이브/잔재
+*.zip
