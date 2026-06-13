@@ -110,6 +110,47 @@ function queryRecordsCore(rawCode) {
   return { ok: true, records: records, total: records.length };
 }
 
+// 전체 시트(기록_*)를 팀별로 합산 — 대시보드 "전체 합산"용
+function queryAllCore() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var agg = {}; // 팀명 -> {sum, count}
+  var totalRecords = 0;
+  var codeCount = 0;
+
+  function addTeam(name, val) {
+    name = String(name || "").trim();
+    if (!name) return;
+    if (!agg[name]) agg[name] = { sum: 0, count: 0 };
+    agg[name].sum += val;
+    agg[name].count += 1;
+  }
+
+  sheets.forEach(function(sheet) {
+    if (sheet.getName().indexOf("기록_") !== 0) return;
+    codeCount++;
+    var data = sheet.getDataRange().getValues();
+    if (data.length < 2) return;
+    var h = data[0];
+    var iName = h.indexOf("이름");
+    var iTA = h.indexOf("팀A"), iTB = h.indexOf("팀B");
+    var iSA = h.indexOf("합계(A)"), iSB = h.indexOf("합계(B)");
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (iName >= 0 && !row[iName]) continue; // 이름 없는 행 건너뜀
+      totalRecords++;
+      addTeam(row[iTA], Number(row[iSA] || 0));
+      addTeam(row[iTB], Number(row[iSB] || 0));
+    }
+  });
+
+  var teams = Object.keys(agg).map(function(n) {
+    var a = agg[n];
+    return { name: n, sum: a.sum, count: a.count, avg: a.count ? (a.sum / a.count) : 0 };
+  });
+  return { ok: true, teams: teams, totalRecords: totalRecords, codeCount: codeCount };
+}
+
 function deleteRecordCore(rawCode, rowNum) {
   var code = normalizeCode(rawCode);
   rowNum = parseInt(rowNum, 10);
@@ -131,6 +172,7 @@ function authorize() {
 // ── google.script.run 용 (도메인 제한 웹앱에서 동일출처 호출) ──
 function submitRecord(payload) { return submitRecordCore(payload); }
 function queryRecords(code)    { return queryRecordsCore(code); }
+function queryAllRecords()     { return queryAllCore(); }
 function deleteRecord(code, rowNum) { return deleteRecordCore(code, rowNum); }
 
 // ── POST: 학생 제출 (fetch 경로) ──
@@ -149,6 +191,11 @@ function doGet(e) {
   // action=query: 수업 코드별 기록 조회 (JSON)
   if (action === "query") {
     return doQuery(e);
+  }
+
+  // action=queryall: 전체 시트 팀별 합산 (JSON) — 대시보드용
+  if (action === "queryall") {
+    return doQueryAll(e);
   }
 
   // action=delete: 행 삭제
@@ -184,6 +231,14 @@ function doGet(e) {
 function doQuery(e) {
   try {
     return jsonResponse(queryRecordsCore(e.parameter.code));
+  } catch (err) {
+    return jsonResponse({ ok: false, error: err.message });
+  }
+}
+
+function doQueryAll(e) {
+  try {
+    return jsonResponse(queryAllCore());
   } catch (err) {
     return jsonResponse({ ok: false, error: err.message });
   }
