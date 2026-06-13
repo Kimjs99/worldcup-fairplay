@@ -4,6 +4,26 @@
 
 버전은 앱 배포 버전(웹앱 푸터 · clasp 배포 설명)과 동일하게 매깁니다.
 
+## [v1.5.0] - 2026-06-13 (GitHub Pages 반영 · 학교 Apps Script `AKfycbzP` 재배포 대기)
+
+### ✨ Features
+- 학생용에 **조별순위 탭** 신설 (`9c4c970`)
+  - 조별리그 탭의 단순 `lookuptable` 기반 '실시간 조별 순위' 카드 제거
+  - 경기결과를 직접 집계해 **FIFA 2026 타이브레이크**(①승점 → ②전체 골득실 → ③전체 다득점 → 동률 시 ④맞대결 승점 → ⑤맞대결 골득실 → ⑥맞대결 다득점)로 정렬 — 결과 페이지(`computeStandings`)의 로직을 이식
+  - 팀 엠블럼 표시, A~L 12개 조 전체 표시, 한국 강조. 집계 불가 시 `lookuptable` 폴백
+  - 로컬 브라우저 검증: A조 Mexico(GD+2) > 🇰🇷South Korea(GD+1) 정렬 정확
+- **디스플레이 모드(모바일/태블릿/PC) 반응형 지원** — 화면 폭(≥768px·≥1100px)에 따라 컨테이너 폭·열 수 조정 (`bcd0f55`)
+
+### 🐛 Bug Fixes
+- 교사용 조회·삭제 실패 시 generic "네트워크 오류" 대신 **실제 오류 메시지 노출** (`9c4c970`)
+  - `google.script.run`(학교 도메인 채널) 실패가 서버측 오류를 가려 모든 실패가 '네트워크 오류'로 보이던 진단 난점 개선. fetch 폴백 경로와 메시지 일관화
+
+### 📝 Documentation
+- CLAUDE.md를 **단일 저장소 구조**로 갱신 — `workspace-portal` 모노레포 분산 구조에서 `worldcup-fairplay` 단독 저장소 기준으로 재작성 (`dd3d8e8`)
+
+### 🔧 Chores
+- **전체 소스 마이그레이션** — `workspace-portal/월드컵 페어플레이 기록/` + 별도 Pages 저장소 → `worldcup-fairplay` 단독 저장소로 통합 (`ecc437f`)
+
 ## [v1.4.0] - 2026-06-12 (학교 Apps Script `AKfycbzP` @4 · 개인 `AKfycbwK` @10 · GitHub Pages)
 
 ### ✨ Features
