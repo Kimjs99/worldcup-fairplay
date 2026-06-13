@@ -69,6 +69,13 @@ cd ~/Projects/worldcup-fairplay && git push origin main
 - 정적 HTML이라 로컬 빌드/lint/테스트 도구가 전혀 없다. 찾지 말 것. HTML 내 JS 문법만 점검하려면 `<script>` 블록을 빼내 `node --check`로 확인하고, 브라우저로 직접 열어 동작을 본다.
 - 배포 후 점검: `curl -sL ".../exec?view=results"`로 서빙 HTML에 신규 함수(예: `computeStandings`) 포함 여부 확인(전파 1~3분). 단 공식 경기 데이터·렌더는 클라이언트 fetch+샌드박스 iframe이라 curl로 안 보이니 **실제 렌더는 브라우저 스크린샷으로** 확인.
 
+### 버전 관리 (배포 시 3곳을 동일 버전으로)
+
+릴리스 버전(`vX.Y.Z`, 유의적 버전)은 **세 곳에 동일하게** 매긴다 — 따로 놀면 안 됨:
+1. 웹앱 푸터의 버전 문자열 (루트 HTML)
+2. `clasp deploy --description "vX.Y.Z …"`
+3. `CHANGELOG.md` (Keep a Changelog 형식, 한국어). 변경 후 항상 새 버전 항목 추가.
+
 ## 클라이언트 ↔ 백엔드 연동 규칙 (반복해서 발목 잡힌 지점)
 
 - 두 HTML 모두 `APPS_SCRIPT_URL` / `SCRIPT_URL`에 **`/exec` 절대주소를 하드코딩**한다. `window.location.href` 기반으로 잡으면 정적 호스팅에서 자기 자신을 호출해 네트워크 오류가 난다.
