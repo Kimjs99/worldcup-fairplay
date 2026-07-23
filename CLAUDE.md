@@ -48,15 +48,17 @@ cd ~/Projects/worldcup-fairplay
 # 0) 소스(루트 HTML·files/Code.gs)를 배포본으로 전파
 ./sync.sh
 
-# 1) 학교 계정 로그인 (개인 Gmail은 "The caller does not have permission")
-clasp login   # 브라우저에서 kimjs@hwajeop.ms.kr 선택
+# 1) 학교 계정은 clasp 멀티계정 `school`로 등록돼 있음 (2026-07-24, `clasp login --user school`)
+#    — 모든 명령에 `--user school` 필수. 기본 계정(개인 Gmail)으로 실행하면
+#    "The caller does not have permission". `clasp login` 재로그인은 기본 계정을 덮어쓰니 금지.
+#    (등록이 풀렸다면 `clasp login --user school`로 재등록 — 브라우저에서 kimjs@hwajeop.ms.kr 선택)
 
 # 2) appsscript-school/ 에서 push/deploy
 cd appsscript-school
-clasp pull    # ★먼저 라이브 백업·diff로 "순수 상위호환"(학교 고유 변경 없음) 확인.
-              #   pull이 배포본을 덮어쓰므로, 확인 후 다시 `cd .. && ./sync.sh`로 내 소스 복원.
-clasp push -f
-clasp deploy --deploymentId AKfycbzPtoua2JSVBBiMkcRO8liL-GxXmjDJFmUYluYvZC63xkKU7XPAx2BItx95K1rZ8jDi \
+clasp --user school pull    # ★먼저 라이브 백업·diff로 "순수 상위호환"(학교 고유 변경 없음) 확인.
+                            #   pull이 배포본을 덮어쓰므로, 확인 후 다시 `cd .. && ./sync.sh`로 내 소스 복원.
+clasp --user school push -f
+clasp --user school deploy --deploymentId AKfycbzPtoua2JSVBBiMkcRO8liL-GxXmjDJFmUYluYvZC63xkKU7XPAx2BItx95K1rZ8jDi \
   --description "vX.Y.Z 설명"
 
 # GitHub Pages 배포 = 저장소 push (루트 index/teacher/results 서빙)
